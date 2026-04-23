@@ -1,19 +1,19 @@
 // 锂矿板块相对强度排名 - Cloudflare Pages Function
-// 拉取东方财富K线数据，计算RPS及排名变化
+// 拉取腾讯财经K线数据，计算RPS及排名变化
 
 const STOCKS = [
-  { code: '002460', name: '赣锋锂业', market: 0 },
-  { code: '002466', name: '天齐锂业', market: 0 },
-  { code: '002738', name: '中矿资源', market: 0 },
-  { code: '300390', name: '天华新能', market: 0 },
-  { code: '000792', name: '盐湖股份', market: 0 },
-  { code: '002240', name: '盛新锂能', market: 0 },
-  { code: '002756', name: '永兴材料', market: 0 },
-  { code: '002497', name: '雅化集团', market: 0 },
-  { code: '000155', name: '川能动力', market: 0 },
-  { code: '002192', name: '融捷股份', market: 0 },
-  { code: '002176', name: '江特电机', market: 0 },
-  { code: '000762', name: '西藏矿业', market: 0 },
+  { code: '002460', name: '赣锋锂业', market: 'sz' },
+  { code: '002466', name: '天齐锂业', market: 'sz' },
+  { code: '002738', name: '中矿资源', market: 'sz' },
+  { code: '300390', name: '天华新能', market: 'sz' },
+  { code: '000792', name: '盐湖股份', market: 'sz' },
+  { code: '002240', name: '盛新锂能', market: 'sz' },
+  { code: '002756', name: '永兴材料', market: 'sz' },
+  { code: '002497', name: '雅化集团', market: 'sz' },
+  { code: '000155', name: '川能动力', market: 'sz' },
+  { code: '002192', name: '融捷股份', market: 'sz' },
+  { code: '002176', name: '江特电机', market: 'sz' },
+  { code: '000762', name: '西藏矿业', market: 'sz' },
 ];
 
 const CACHE_TTL = 3600 * 1000; // 1小时
@@ -21,15 +21,10 @@ let cachedBody = null;
 let cacheTime = 0;
 
 async function fetchKline(stock) {
-  const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get`
-    + `?secid=${stock.market}.${stock.code}`
-    + `&fields1=f1,f2,f3,f4,f5,f6`
-    + `&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61`
-    + `&klt=101&fqt=1&beg=0&end=20500101`;
+  const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${stock.market}${stock.code},day,,,500,qfq`;
 
   const resp = await fetch(url, {
     headers: {
-      'Referer': 'https://quote.eastmoney.com/',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
   });
@@ -37,26 +32,36 @@ async function fetchKline(stock) {
   if (!resp.ok) throw new Error(`Fetch ${stock.code} failed: ${resp.status}`);
 
   const json = await resp.json();
-  if (!json.data || !json.data.klines) throw new Error(`No kline for ${stock.code}`);
+  if (json.code !== 0 || !json.data) throw new Error(`No data for ${stock.code}`);
 
-  const klines = json.data.klines.map(line => {
-    const p = line.split(',');
-    return {
-      date: p[0],
-      open: +p[1],
-      close: +p[2],
-      high: +p[3],
-      low: +p[4],
-      volume: +p[5],
-      amount: +p[6],
-      amplitude: +p[7],
-      change_pct: +p[8],
-      change_amount: +p[9],
-      turnover: +p[10],
-    };
-  });
+  const codeKey = `${stock.market}${stock.code}`;
+  const dayData = json.data[codeKey];
+  if (!dayData) throw new Error(`No data key for ${stock.code}`);
 
-  return { code: stock.code, name: json.data.name || stock.name, klines };
+  const rawKlines = dayData.qfqday || dayData.day;
+  if (!rawKlines || rawKlines.length === 0) throw new Error(`No kline for ${stock.code}`);
+
+  const klines = rawKlines.map(line => ({
+    date: line[0],
+    open: +line[1],
+    close: +line[2],
+    high: +line[3],
+    low: line.length > 4 ? +line[4] : +line[3],
+    volume: line.length > 5 ? +line[5] : 0,
+    change_pct: 0, // calculated below
+  }));
+
+  // Calculate change_pct
+  for (let i = 0; i < klines.length; i++) {
+    if (i === 0) {
+      klines[i].change_pct = 0;
+    } else {
+      const prev = klines[i - 1].close;
+      klines[i].change_pct = prev > 0 ? +((klines[i].close - prev) / prev * 100).toFixed(2) : 0;
+    }
+  }
+
+  return { code: stock.code, name: stock.name, klines };
 }
 
 function calcRPS(stocksData) {
@@ -67,7 +72,6 @@ function calcRPS(stocksData) {
     { label: '20d', offset: 20 },
   ];
 
-  // 构建结果骨架
   const results = stocksData.map(s => ({
     code: s.code,
     name: s.name,
@@ -77,7 +81,7 @@ function calcRPS(stocksData) {
   }));
 
   for (const { label, offset } of periods) {
-    // —— 当期 RPS ——
+    // 当期 RPS
     const curReturns = stocksData.map((s, i) => {
       const len = s.klines.length;
       if (len <= offset) return { i, ret: -Infinity };
@@ -92,21 +96,19 @@ function calcRPS(stocksData) {
       };
     });
 
-    // —— 历史 RPS（用于排名变化） ——
-    const histOffset = offset; // 1日前 / 5日前 / 20日前
-    const allHaveHist = stocksData.every(s => s.klines.length > offset + histOffset);
+    // 历史 RPS（用于排名变化）
+    const allHaveHist = stocksData.every(s => s.klines.length > offset + offset);
     if (!allHaveHist) continue;
 
     const histReturns = stocksData.map((s, i) => {
       const len = s.klines.length;
-      const ret = (s.klines[len - 1 - histOffset].close - s.klines[len - 1 - histOffset - offset].close)
-        / s.klines[len - 1 - histOffset - offset].close;
+      const ret = (s.klines[len - 1 - offset].close - s.klines[len - 1 - offset - offset].close)
+        / s.klines[len - 1 - offset - offset].close;
       return { i, ret };
     });
     histReturns.sort((a, b) => b.ret - a.ret);
     histReturns.forEach((item, histRank) => {
       const cur = results[item.i].rps[label];
-      // 正数 = 排名上升（好事），负数 = 排名下降
       cur.rank_change = (histRank + 1) - cur.rank;
     });
   }

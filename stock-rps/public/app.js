@@ -50,6 +50,8 @@ async function loadData() {
     data = await resp.json();
     showState('main');
     render();
+    // 确保容器可见后 resize 图表
+    setTimeout(() => { if (chart) chart.resize(); }, 50);
     startAutoRefresh();
   } catch (e) {
     document.getElementById('errorMsg').textContent = '数据加载失败: ' + e.message;
@@ -117,14 +119,12 @@ function fmtChange(c) {
 
 function renderSelector() {
   const box = document.getElementById('selector');
-  // 全选按钮
-  let html = `<button class="select-all-btn" onclick="toggleAll()">${selected.size === 12 ? '全不选' : '全选'}</button>`;
+  let html = `<span class="select-all-btn" onclick="event.stopPropagation();toggleAll()">${selected.size === 12 ? '全不选' : '全选'}</span>`;
   for (const [code, meta] of Object.entries(STOCK_META)) {
     const on = selected.has(code);
-    html += `<label class="${on ? 'checked' : ''}" onclick="toggleStock('${code}')">
-      <input type="checkbox" ${on ? 'checked' : ''}>
+    html += `<span class="stock-tag${on ? ' checked' : ''}" onclick="event.stopPropagation();toggleStock('${code}')">
       <span class="dot" style="background:${meta.color}"></span>${meta.name}
-    </label>`;
+    </span>`;
   }
   box.innerHTML = html;
 }
@@ -161,6 +161,8 @@ function updateChart() {
   } else {
     renderNormalized(codes);
   }
+  // 确保图表宽度适配容器
+  setTimeout(() => { if (chart) chart.resize(); }, 0);
 }
 
 function renderCandlestick(code) {

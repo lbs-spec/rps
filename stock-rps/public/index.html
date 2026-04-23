@@ -13,7 +13,7 @@
   --up-bg:rgba(239,68,68,.08);--down-bg:rgba(34,197,94,.08);
 }
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.wrap{max-width:1280px;margin:0 auto;padding:24px 20px}
+.wrap{max-width:1400px;margin:0 auto;padding:24px 20px}
 
 /* Header */
 header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:12px}
@@ -48,17 +48,18 @@ td.price-cell{font-variant-numeric:tabular-nums}
 
 /* Selector */
 .selector{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-.selector label{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:var(--text2);padding:5px 10px;border-radius:6px;border:1px solid var(--border);transition:all .15s;user-select:none}
-.selector label:hover{border-color:var(--accent)}
-.selector label.checked{border-color:var(--accent);background:rgba(59,130,246,.1);color:var(--text)}
-.selector input{display:none}
-.selector .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.select-all-btn{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s}
+.stock-tag{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:var(--text2);padding:5px 10px;border-radius:6px;border:1px solid var(--border);transition:all .15s;user-select:none}
+.stock-tag:hover{border-color:var(--accent)}
+.stock-tag.checked{border-color:var(--accent);background:rgba(59,130,246,.1);color:var(--text)}
+.stock-tag .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.select-all-btn{display:inline-flex;align-items:center;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer;transition:all .15s;user-select:none}
 .select-all-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* Chart */
-#chart{width:100%;height:520px}
-.chart-empty{display:flex;align-items:center;justify-content:center;height:520px;color:var(--text3);font-size:15px}
+.chart-card{padding:8px 4px 4px !important}
+.chart-inner{width:100%}
+#chart{width:100%;height:560px;min-width:0}
+.chart-empty{display:flex;align-items:center;justify-content:center;height:560px;color:var(--text3);font-size:15px}
 
 /* Loading */
 .loading{display:flex;align-items:center;justify-content:center;height:400px;color:var(--text3);font-size:15px;gap:8px}
@@ -105,9 +106,11 @@ td.price-cell{font-variant-numeric:tabular-nums}
 
     <div class="selector" id="selector"></div>
 
-    <div class="card">
-      <div id="chart"></div>
-      <div class="chart-empty" id="chartEmpty" style="display:none">请选择至少一只股票</div>
+    <div class="card chart-card">
+      <div class="chart-inner">
+        <div id="chart"></div>
+        <div class="chart-empty" id="chartEmpty" style="display:none">请选择至少一只股票</div>
+      </div>
     </div>
   </div>
 
