@@ -1,6 +1,6 @@
 // 锂矿板块相对强度排名 - Cloudflare Pages Function
 // 拉取腾讯财经K线数据，计算RPS及排名变化
-
+// RPS计算：Z-score → 正态CDF映射，幅度敏感
 const STOCKS = [
   { code: '002460', name: '赣锋锂业', market: 'sz' },
   { code: '002466', name: '天齐锂业', market: 'sz' },
@@ -64,8 +64,19 @@ async function fetchKline(stock) {
   return { code: stock.code, name: stock.name, klines };
 }
 
+// 标准正态累积分布函数 Φ(z) = 0.5 * (1 + erf(z / sqrt(2)))
+// Abramowitz & Stegun 近似，精度 < 1e-7
+function normCDF(z) {
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+  const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+
 function calcRPS(stocksData) {
-  const n = stocksData.length;
   const periods = [
     { label: '1d', offset: 1 },
     { label: '5d', offset: 5 },
@@ -81,16 +92,33 @@ function calcRPS(stocksData) {
   }));
 
   for (const { label, offset } of periods) {
-    // 当期 RPS
+    // 当期涨幅
     const curReturns = stocksData.map((s, i) => {
       const len = s.klines.length;
       if (len <= offset) return { i, ret: -Infinity };
       return { i, ret: (s.klines[len - 1].close - s.klines[len - 1 - offset].close) / s.klines[len - 1 - offset].close };
     });
+
+    // 计算有效涨幅的均值和标准差
+    const validReturns = curReturns.filter(r => r.ret > -Infinity).map(r => r.ret);
+    const mean = validReturns.reduce((a, b) => a + b, 0) / validReturns.length;
+    const variance = validReturns.reduce((sum, r) => sum + (r - mean) ** 2, 0) / validReturns.length;
+    const std = Math.sqrt(variance);
+
+    // Z-score → 正态 CDF 映射 → RPS
     curReturns.sort((a, b) => b.ret - a.ret);
     curReturns.forEach((item, rank) => {
+      let rpsValue;
+      if (std > 0 && item.ret > -Infinity) {
+        const z = (item.ret - mean) / std;
+        rpsValue = Math.round(normCDF(z) * 1000) / 10;
+      } else if (item.ret > -Infinity) {
+        rpsValue = 50; // 所有涨幅相同
+      } else {
+        rpsValue = 0; // 数据不足
+      }
       results[item.i].rps[label] = {
-        value: Math.round((1 - (rank + 1) / n) * 1000) / 10,
+        value: rpsValue,
         rank: rank + 1,
         rank_change: 0,
       };
